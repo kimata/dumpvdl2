@@ -1,0 +1,124 @@
+image: gitlab.green-rabbit.net:5050/kimata/local-ubuntu:250706_043ea01d
+
+variables:
+    UV_LINK_MODE: copy
+    UV_CACHE_DIR: .uv-cache
+
+default:
+    before_script:
+        - echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+
+stages:
+    - generate-tag
+    - build
+    - tag-latest
+    - deploy
+    - renovate
+
+generate-tag:
+    stage: generate-tag
+
+    script:
+        - echo "TAG=$(date +%y%m%d)_${CI_COMMIT_SHORT_SHA}" > tag.env
+
+    artifacts:
+        reports:
+            dotenv: tag.env
+        expire_in: 1 hour
+
+build-image:
+    stage: build
+
+    needs:
+        - generate-tag
+
+    variables:
+        BUILDER: builder-${CI_PROJECT_NAME}
+
+    script:
+        - 'echo "Building: ${CI_REGISTRY_IMAGE}:${TAG}"'
+
+        - |
+            docker buildx create \
+                --name ${BUILDER} \
+                --use \
+                --config /etc/buildkitd.toml
+
+        - docker buildx use ${BUILDER}
+        - docker buildx inspect --bootstrap
+        - >
+            docker buildx build --provenance=false --progress=plain --platform linux/amd64,linux/arm64/v8
+            --cache-from type=registry,ref=${CI_REGISTRY_IMAGE}:cache
+            --cache-from type=registry,ref=${CI_REGISTRY_IMAGE}:latest
+            --cache-to type=inline --cache-to type=registry,ref=${CI_REGISTRY_IMAGE}:cache,mode=max
+            --build-arg IMAGE_BUILD_DATE=$(date --iso-8601=seconds)
+            --tag ${CI_REGISTRY_IMAGE}:${TAG} --push .
+    # after_script:
+    #     - docker buildx rm ${BUILDER} || true
+
+
+tag-latest:
+    stage: tag-latest
+
+    needs:
+        - generate-tag
+        - build-image
+
+    script:
+        - 'echo "Tagging multi-arch image ${CI_REGISTRY_IMAGE}:${TAG} as latest"'
+        - docker buildx imagetools create -t ${CI_REGISTRY_IMAGE}:latest ${CI_REGISTRY_IMAGE}:${TAG}
+
+    rules:
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: never
+        - when: on_success
+
+deploy:
+    stage: deploy
+
+    needs:
+        - generate-tag
+        - build-image
+
+    image:
+        name: gitlab.green-rabbit.net:5050/kimata/local-kubectl:250715_c88f3965
+
+    before_script: []
+
+    script:
+        - 'IMAGE="${CI_REGISTRY_IMAGE}:${TAG}"'
+        - 'echo "Deploying image: $IMAGE"'
+
+        - kubectl config get-contexts
+        - kubectl config use-context kimata/dumpvdl2:pod-rollout
+
+        - kubectl -n sensor set image deployment/dumpvdl2 dumpvdl2=${IMAGE}
+
+        - kubectl -n sensor rollout status deployment/dumpvdl2 --timeout=300s
+
+        - 'echo "✓ All deployments updated successfully to $TAG"'
+
+    rules:
+        # NOTE: 自動実行ではデプロイしない
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+          when: never
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: never
+        - when: on_success
+
+renovate:
+    stage: renovate
+    dependencies: []
+    image:
+        name: gitlab.green-rabbit.net:5050/kimata/local-renovate:250715_3b8866ff
+
+    before_script: []
+
+    script:
+        - renovate --platform gitlab --token ${RENOVATE_TOKEN} --endpoint ${CI_SERVER_URL}/api/v4 ${CI_PROJECT_PATH}
+    rules:
+        - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH
+          when: never
+        - if: $CI_PIPELINE_SOURCE == "schedule"
+        - changes:
+            - renovate.json
