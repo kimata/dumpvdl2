@@ -30,6 +30,7 @@ RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \
     --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install --no-install-recommends --assume-yes \
     language-pack-ja \
+    tzdata \
     librtlsdr2 \
     libxml2 \
     zlib1g \
