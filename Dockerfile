@@ -13,7 +13,8 @@ RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \
     zlib1g-dev \
     libjansson-dev \
     libglib2.0-dev \
-    libzmq3-dev
+    libzmq3-dev \
+    libsqlite3-dev
 
 
 RUN git clone https://github.com/szpajder/libacars -b v2.2.0
@@ -21,7 +22,7 @@ RUN mkdir libacars/build && cd libacars/build && cmake ..
 RUN cd libacars/build && make && make install
 
 RUN git clone https://github.com/szpajder/dumpvdl2.git -b v2.4.0
-RUN mkdir dumpvdl2/build && cd dumpvdl2/build && cmake ..
+RUN mkdir dumpvdl2/build && cd dumpvdl2/build && cmake -DRTLSDR=TRUE -DZMQ=TRUE -DSQLITE=TRUE ..
 RUN cd dumpvdl2/build && make && make install
 
 FROM ubuntu:24.04
@@ -36,7 +37,8 @@ RUN --mount=type=cache,target=/var/lib/apt,sharing=locked \
     zlib1g \
     libjansson4 \
     libglib2.0-0 \
-    libzmq5
+    libzmq5 \
+    libsqlite3-0
 
 ENV TZ=Asia/Tokyo \
     LANG=ja_JP.UTF-8 \
