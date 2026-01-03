@@ -58,12 +58,4 @@ RUN ldconfig
 
 EXPOSE 5555
 
-#CMD ["/opt/dumpvdl2/dumpvdl2", "--rtlsdr", "VDL2", "--centerfreq", "136975000", "--gain", "49.6", "--msg-filter", "downlink,avlc_i,acars,-acars_nodata", "--output", "decoded:pp_acars:zmq:mode=server,endpoint=tcp://*:5555"]
-
-#CMD ["/opt/dumpvdl2/dumpvdl2", "--rtlsdr", "VDL2", "--centerfreq", "136975000", "--gain", "49.6", "--msg-filter", "all,-avlc_s,-acars_nodata,-gsif,-x25_control,-idrp_keepalive,-esis"]
-
 CMD ["/opt/dumpvdl2/dumpvdl2", "--rtlsdr", "VDL2", "--gain", "49.6", "--msg-filter", "all,-avlc_s,-acars_nodata,-gsif,-x25_control,-idrp_keepalive,-esis", "--output", "decoded:json:zmq:mode=server,endpoint=tcp://*:5050", "--output", "decoded:json:file:path=-", "136825000", "136875000", "136925000", "136975000"]
-
-
-
-
