@@ -2,7 +2,7 @@
 
 Kubernetes 対応の dumpvdl2 コンテナ化プロジェクト
 
-[![GitLab CI](https://gitlab.green-rabbit.net/kimata/dumpvdl2/badges/main/pipeline.svg)](https://gitlab.green-rabbit.net/kimata/dumpvdl2/-/pipelines)
+[![Docker](https://github.com/kimata/dumpvdl2/actions/workflows/docker.yaml/badge.svg)](https://github.com/kimata/dumpvdl2/actions/workflows/docker.yaml)
 
 ## 📑 目次
 
@@ -23,7 +23,7 @@ Kubernetes 対応の dumpvdl2 コンテナ化プロジェクト
   - [dumpvdl2 パラメータ](#dumpvdl2-パラメータ)
   - [メッセージフィルタ](#メッセージフィルタ)
 - [📊 CI/CD](#-cicd)
-  - [GitLab CI パイプライン](#gitlab-ci-パイプライン)
+  - [GitHub Actions パイプライン](#github-actions-パイプライン)
   - [自動デプロイ](#自動デプロイ)
 - [🌐 ポート構成](#-ポート構成)
 - [📝 ライセンス](#-ライセンス)
@@ -39,7 +39,7 @@ Kubernetes 対応の dumpvdl2 コンテナ化プロジェクト
 - 📡 **VDL2 デコード** - 136.975 MHz での VHF データリンク受信
 - 🔌 **ZMQ 配信** - ZeroMQ による ACARS メッセージのリアルタイム配信
 - 🛡️ **マルチアーキテクチャ** - AMD64/ARM64 対応
-- 🔄 **自動デプロイ** - GitLab CI/CD による継続的配信
+- 🔄 **自動ビルド** - GitHub Actions による継続的インテグレーション
 - 📊 **ACARS 出力** - pp_acars フォーマットでのメッセージ配信
 
 ## 🏗️ システム構成
@@ -51,37 +51,37 @@ flowchart TD
     subgraph "📡 VDL2 受信"
         RTL[📻 RTL-SDR<br/>VHF 受信機]
         SIG[📶 136.975 MHz<br/>VDL Mode 2]
-        
+
         SIG --> RTL
     end
-    
+
     subgraph "🐳 Docker Container"
         VDL2[✈️ dumpvdl2<br/>VDL2 デコーダー]
         LIBACARS[📚 libacars<br/>ACARS ライブラリ]
         ZMQ[🔌 ZeroMQ<br/>メッセージブローカー]
-        
+
         RTL -.->|USB| VDL2
         LIBACARS --> VDL2
         VDL2 --> ZMQ
     end
-    
+
     subgraph "☸️ Kubernetes"
         POD[🔧 Pod<br/>dumpvdl2]
         SVC[🔗 Service<br/>Port: 5555]
         DEP[📈 Deployment<br/>Rollout Management]
-        
+
         POD --> SVC
         DEP --> POD
     end
-    
+
     subgraph "👥 クライアント"
         CONSUMER[📊 ACARS Consumer<br/>メッセージ処理]
         MONITOR[📈 Monitor<br/>統計収集]
-        
+
         SVC --> CONSUMER
         SVC --> MONITOR
     end
-    
+
     ZMQ -.->|TCP 5555| SVC
 ```
 
@@ -95,12 +95,12 @@ graph TB
             CMAKE[🔧 CMake<br/>ビルドツール]
             LIBACARS_SRC[📚 libacars v2.2.0<br/>ソースコード]
             VDL2_SRC[✈️ dumpvdl2 v2.4.0<br/>ソースコード]
-            
+
             BUILD --> CMAKE
             CMAKE --> LIBACARS_SRC
             CMAKE --> VDL2_SRC
         end
-        
+
         subgraph "📦 Runtime Stage: Ubuntu 24.04"
             RT[📻 librtlsdr2<br/>RTL-SDR ライブラリ]
             XML[📄 libxml2<br/>XML 処理]
@@ -108,18 +108,18 @@ graph TB
             GLIB[💻 libglib2.0<br/>ユーティリティ]
             ZMQ_LIB[🔌 libzmq5<br/>メッセージング]
         end
-        
+
         subgraph "🛠️ Application Layer"
             VDL2_BIN[✈️ dumpvdl2<br/>/opt/dumpvdl2/dumpvdl2]
             LIBACARS_LIB[📚 libacars-2.so<br/>/usr/local/lib]
         end
-        
+
         subgraph "⚙️ Configuration"
             FREQ[📡 136.975 MHz<br/>Center Frequency]
             GAIN[📊 49.6 dB<br/>RF Gain]
             FILTER[🔍 Filter<br/>downlink,avlc_i,acars]
         end
-        
+
         RT --> VDL2_BIN
         LIBACARS_LIB --> VDL2_BIN
         ZMQ_LIB --> VDL2_BIN
@@ -127,11 +127,11 @@ graph TB
         VDL2_BIN --> GAIN
         VDL2_BIN --> FILTER
     end
-    
+
     subgraph "🔌 External Ports"
         P5555[🔌 5555<br/>ZMQ Server]
     end
-    
+
     VDL2_BIN --> P5555
 ```
 
@@ -144,23 +144,23 @@ sequenceDiagram
     participant L as 📚 libacars
     participant Z as 🔌 ZeroMQ
     participant C as 👤 Consumer
-    
+
     Note over R,C: VDL2 メッセージ受信とデコード
-    
+
     R->>D: VHF 136.975MHz 信号
     D->>D: VDL2 デモジュレーション
     D->>L: ACARS デコード要求
     L->>L: メッセージ解析
     L->>D: ACARS メッセージ
-    
+
     Note over R,C: メッセージフィルタリング
     D->>D: フィルタ適用<br/>(downlink, avlc_i, acars)
-    
+
     Note over R,C: ZMQ 配信
     D->>Z: pp_acars フォーマット
     C->>Z: TCP接続 (5555)
     Z->>C: ACARS メッセージ配信
-    
+
     loop リアルタイム配信
         R->>D: 継続的な信号受信
         D->>Z: デコード済みメッセージ
@@ -298,41 +298,33 @@ EOF
 
 ## 📊 CI/CD
 
-### GitLab CI パイプライン
+### GitHub Actions パイプライン
 
 ```mermaid
 flowchart LR
-    subgraph "🔧 Build Stage"
-        TAG[🏷️ Generate Tag<br/>YYMMDD_SHA]
-        BUILD[🐳 Build Image<br/>Multi-arch]
-        LATEST[🔖 Tag Latest<br/>Main Branch Only]
+    subgraph "🔧 Build Job"
+        CHECKOUT[📥 Checkout<br/>Repository]
+        QEMU[🔧 Setup QEMU<br/>Multi-arch]
+        BUILDX[🐳 Setup Buildx<br/>Docker Builder]
+        LOGIN[🔐 Login<br/>GHCR]
+        META[🏷️ Extract Metadata<br/>Tags & Labels]
+        BUILD[🐳 Build & Push<br/>Multi-arch Image]
     end
-    
-    subgraph "🚀 Deploy Stage"
-        DEPLOY[☸️ Deploy<br/>Kubernetes Update]
-        ROLLOUT[📈 Rollout Status<br/>Health Check]
-    end
-    
-    subgraph "🔄 Maintenance"
-        RENOVATE[🤖 Renovate<br/>Dependency Updates]
-    end
-    
-    TAG --> BUILD
-    BUILD --> LATEST
-    BUILD --> DEPLOY
-    DEPLOY --> ROLLOUT
-    
-    BUILD -.-> RENOVATE
+
+    CHECKOUT --> QEMU
+    QEMU --> BUILDX
+    BUILDX --> LOGIN
+    LOGIN --> META
+    META --> BUILD
 ```
 
 ### 自動デプロイ
 
-- 🎯 **トリガー**: main ブランチへのプッシュ
-- 🏷️ **タグ生成**: `YYMMDD_CommitSHA` 形式
+- 🎯 **トリガー**: push イベント
+- 🏷️ **タグ生成**: ブランチ名、latest（main ブランチ）、SHA
 - 🏗️ **マルチアーキテクチャビルド**: AMD64/ARM64
-- ☸️ **Kubernetes デプロイ**: sensor namespace
-- ✅ **ヘルスチェック**: rollout status 確認
-- 🚫 **スケジュール実行時**: デプロイスキップ
+- 📦 **レジストリ**: GitHub Container Registry (ghcr.io)
+- 🔄 **キャッシュ**: GitHub Actions キャッシュ使用
 
 ## 🌐 ポート構成
 
